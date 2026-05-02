@@ -69,6 +69,14 @@
   @keyframes spin{to{transform:rotate(360deg)}}
   .loading-text{font-size:14px;color:var(--text2);}
   .error-banner{background:rgba(245,101,101,0.1);border:1px solid rgba(245,101,101,0.3);border-radius:10px;padding:14px 18px;font-size:13px;color:var(--red);margin-bottom:1rem;display:none;}
+  .year-banner{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1.5rem;}
+  .banner-card{background:linear-gradient(135deg,var(--bg2),var(--bg3));border:1px solid var(--border);border-radius:var(--card-radius);padding:20px 28px;display:flex;flex-direction:column;gap:6px;position:relative;overflow:hidden;}
+  .banner-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--banner-color,var(--accent));border-radius:3px 3px 0 0;}
+  .banner-label{font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:var(--text2);}
+  .banner-value{font-size:42px;font-weight:700;letter-spacing:-0.03em;color:var(--text);font-family:'DM Mono',monospace;line-height:1;}
+  .banner-sub{font-size:13px;color:var(--text3);margin-top:2px;}
+  .banner-year{font-size:12px;color:var(--text3);position:absolute;top:20px;right:20px;font-weight:500;}
+  @media(max-width:640px){.year-banner{grid-template-columns:1fr;}}
 </style>
 </head>
 <body>
@@ -97,6 +105,21 @@
 <div class="main">
   <div class="error-banner" id="error-banner"></div>
   <div class="status-bar"><span id="status-text">Cargando registros...</span></div>
+
+  <div class="year-banner">
+    <div class="banner-card" style="--banner-color:var(--accent4)">
+      <span class="banner-year" id="banner-year">2026</span>
+      <span class="banner-label">Ventas totales en colones</span>
+      <span class="banner-value" id="banner-ventas">—</span>
+      <span class="banner-sub" id="banner-ventas-sub">Cargá el reporte de facturación</span>
+    </div>
+    <div class="banner-card" style="--banner-color:var(--accent3)">
+      <span class="banner-year" id="banner-year2">2026</span>
+      <span class="banner-label">Kg tostado en el año</span>
+      <span class="banner-value" id="banner-kg">—</span>
+      <span class="banner-sub" id="banner-kg-sub">kg tostados este año</span>
+    </div>
+  </div>
 
   <div class="section-label">Resumen general</div>
   <div class="metrics-grid">
@@ -154,7 +177,7 @@
 
   <div class="charts-row2">
     <div class="card">
-      <div class="card-header"><span class="card-title">Órdenes acumuladas por mes</span></div>
+      <div class="card-header"><span class="card-title">Kg acumulados por mes</span></div>
       <div class="chart-wrap" style="height:210px">
         <canvas id="c-acum" role="img" aria-label="Órdenes acumuladas por mes">Acumulado mensual.</canvas>
       </div>
@@ -166,9 +189,12 @@
       </div>
     </div>
     <div class="card">
-      <div class="card-header"><span class="card-title">Órdenes por año</span></div>
+      <div class="card-header">
+        <span class="card-title">Kg tostado — año actual vs anterior</span>
+        <span class="card-badge">Comparativa</span>
+      </div>
       <div class="chart-wrap" style="height:210px">
-        <canvas id="c-anio" role="img" aria-label="Órdenes por año">Por año.</canvas>
+        <canvas id="c-comp-kg" role="img" aria-label="Comparativa kg tostado año actual vs anterior">Comparativa kg.</canvas>
       </div>
     </div>
   </div>
@@ -176,11 +202,11 @@
   <div class="charts-row3">
     <div class="card">
       <div class="card-header">
-        <span class="card-title">Ventas en línea por mes</span>
-        <span class="card-badge" style="background:rgba(247,207,79,0.12);color:#f7cf4f">Sheet</span>
+        <span class="card-title">Comparativa ventas online — año actual vs anterior</span>
+        <span class="card-badge" style="background:rgba(247,207,79,0.12);color:#f7cf4f">Shopify</span>
       </div>
       <div class="chart-wrap" style="height:200px">
-        <canvas id="c-online" role="img" aria-label="Ventas online por mes">Online mensual.</canvas>
+        <canvas id="c-comp-shopify" role="img" aria-label="Comparativa ventas Shopify">Comparativa online.</canvas>
       </div>
     </div>
     <div class="card">
@@ -381,6 +407,7 @@ function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[i
 const COLORS=['#4f8ef7','#1ec98e','#f7834f','#a78bfa','#f7cf4f','#f56565','#34d399','#fb923c','#60a5fa','#c084fc'];
 
 function buildAll(rows){
+  window._lastRows = rows; // store for Shopify comparativa
   const onlineRows=rows.filter(isOnline);
   const offlineRows=rows.filter(r=>!isOnline(r));
   const totalOrds=rows.length;
@@ -397,6 +424,15 @@ function buildAll(rows){
   document.getElementById('m-online').textContent=fmtNum(onlineRows.length);
   document.getElementById('m-online-pct').textContent=`${onlinePct}% del total`;
   document.getElementById('m-util').textContent=billingTotal?'₡'+fmtNum(billingTotal*MARGIN):'—';
+
+  // Banner — current year kg
+  const currentYear = new Date().getFullYear().toString();
+  const currentYearRows = allRows.filter(r => f(r,'Ano').toString().trim() === currentYear);
+  const bannerKg = currentYearRows.reduce((a,r)=>a+num(r,'Kg tostado'),0);
+  document.getElementById('banner-year').textContent = currentYear;
+  document.getElementById('banner-year2').textContent = currentYear;
+  document.getElementById('banner-kg').textContent = fmtKg(bannerKg);
+  document.getElementById('banner-kg-sub').textContent = 'kg tostados en ' + currentYear;
 
   // Kg tostado por mes + proyección
   const monthKg={};
@@ -436,10 +472,20 @@ function buildAll(rows){
   rows.forEach(r=>{ const p=getProduct(r); prodKg[p]=(prodKg[p]||0)+num(r,'Kg tostado')+num(r,'Cantidad'); });
   const pLabels=Object.keys(prodKg).sort((a,b)=>prodKg[b]-prodKg[a]);
 
+  // Consolidate small products into "Otros" (keep top 6)
+  const TOP_N = 6;
+  let finalPLabels = pLabels, finalPData = pLabels.map(p=>Math.round(prodKg[p]*10)/10);
+  if(pLabels.length > TOP_N) {
+    const topLabels = pLabels.slice(0, TOP_N);
+    const otrosTotal = pLabels.slice(TOP_N).reduce((a,p)=>a+prodKg[p],0);
+    finalPLabels = [...topLabels, 'Otros'];
+    finalPData = [...topLabels.map(p=>Math.round(prodKg[p]*10)/10), Math.round(otrosTotal*10)/10];
+  }
+
   destroyChart('prod');
   charts['prod']=new Chart(document.getElementById('c-prod'),{
     type:'doughnut',
-    data:{labels:pLabels,datasets:[{data:pLabels.map(p=>Math.round(prodKg[p]*10)/10),backgroundColor:COLORS.slice(0,pLabels.length),borderWidth:2,borderColor:'#1a1d27'}]},
+    data:{labels:finalPLabels,datasets:[{data:finalPData,backgroundColor:COLORS.slice(0,finalPLabels.length),borderWidth:2,borderColor:'#1a1d27'}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa8',font:{size:11},boxWidth:12,padding:10}}},cutout:'60%'}
   });
 
@@ -448,23 +494,41 @@ function buildAll(rows){
   rows.forEach(r=>{ const y=(f(r,'Ano')||'').toString().trim(); const yn=parseInt(y); if(y && yn>=2015 && yn<=2030) anioC[y]=(anioC[y]||0)+1; });
   const aLabels=Object.keys(anioC).filter(Boolean).sort();
 
-  destroyChart('anio');
-  charts['anio']=new Chart(document.getElementById('c-anio'),{
-    type:'doughnut',
-    data:{labels:aLabels,datasets:[{data:aLabels.map(y=>anioC[y]),backgroundColor:COLORS.slice(0,aLabels.length),borderWidth:2,borderColor:'#1a1d27'}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa8',font:{size:11},boxWidth:12,padding:10}}},cutout:'60%'}
-  });
+  // Órdenes por año chart removed — info covered by filters and comparativa
 
   // Online por mes
   const onM={};
   onlineRows.forEach(r=>{ const ym=getYearMonth(r); if(ym) onM[ym]=(onM[ym]||0)+1; });
   const omLabels=Object.keys(onM).sort();
 
-  destroyChart('online');
-  charts['online']=new Chart(document.getElementById('c-online'),{
+  // Comparativa kg tostado: año actual vs año anterior
+  const curYear = new Date().getFullYear();
+  const prevYear = curYear - 1;
+  const MESES_SHORT = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
+  const kgCurYear = Array(12).fill(0);
+  const kgPrevYear = Array(12).fill(0);
+  rows.forEach(r => {
+    const ym = getYearMonth(r);
+    if(!ym) return;
+    const [yr, mo] = ym.split('-').map(Number);
+    const kg = num(r,'Kg tostado');
+    if(yr === curYear) kgCurYear[mo-1] += kg;
+    else if(yr === prevYear) kgPrevYear[mo-1] += kg;
+  });
+
+  destroyChart('compkg');
+  charts['compkg']=new Chart(document.getElementById('c-comp-kg'),{
     type:'bar',
-    data:{labels:omLabels.map(getMesLabel),datasets:[{label:'Online',data:omLabels.map(m=>onM[m]),backgroundColor:'rgba(247,207,79,0.7)',borderRadius:4}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a5e72',font:{size:10},maxRotation:45},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#5a5e72',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}}}}
+    data:{
+      labels: MESES_SHORT,
+      datasets:[
+        {label: curYear.toString(), data: kgCurYear.map(v=>Math.round(v*10)/10), backgroundColor:'#4f8ef7', borderRadius:3},
+        {label: prevYear.toString(), data: kgPrevYear.map(v=>Math.round(v*10)/10), backgroundColor:'rgba(79,142,247,0.25)', borderRadius:3}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{color:'#8b8fa8',font:{size:11},boxWidth:12}}},
+      scales:{x:{ticks:{color:'#5a5e72',font:{size:10}}},y:{ticks:{color:'#5a5e72',font:{size:11}}}}}
   });
 
   // Top 8 clientes
@@ -595,6 +659,37 @@ function buildShopify(orders) {
 
   // Tabla órdenes recientes
   const recent=orders.slice(0,15);
+  // Comparativa Shopify año actual vs anterior
+  const shCurYear = new Date().getFullYear();
+  const shPrevYear = shCurYear - 1;
+  const shMeses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
+  const shCur = Array(12).fill(0);
+  const shPrev = Array(12).fill(0);
+  orders.forEach(o => {
+    const d = new Date(o.fecha);
+    const yr = d.getFullYear();
+    const mo = d.getMonth();
+    const v = parseFloat(o.total||0);
+    if(yr === shCurYear) shCur[mo] += v;
+    else if(yr === shPrevYear) shPrev[mo] += v;
+  });
+  destroyChart('compshopify');
+  if(document.getElementById('c-comp-shopify')) {
+    charts['compshopify']=new Chart(document.getElementById('c-comp-shopify'),{
+      type:'bar',
+      data:{
+        labels: shMeses,
+        datasets:[
+          {label: shCurYear.toString(), data: shCur.map(v=>Math.round(v)), backgroundColor:'rgba(247,207,79,0.8)', borderRadius:3},
+          {label: shPrevYear.toString(), data: shPrev.map(v=>Math.round(v)), backgroundColor:'rgba(247,207,79,0.2)', borderRadius:3}
+        ]
+      },
+      options:{responsive:true,maintainAspectRatio:false,
+        plugins:{legend:{position:'top',labels:{color:'#8b8fa8',font:{size:11},boxWidth:12}}},
+        scales:{x:{ticks:{color:'#5a5e72',font:{size:10}}},y:{ticks:{color:'#5a5e72',font:{size:11},callback:v=>'₡'+fmtNum(v)}}}}
+    });
+  }
+
   document.getElementById('sh-tbody').innerHTML=recent.map(o=>`
     <tr style="border-bottom:0.5px solid var(--border);">
       <td style="padding:8px 10px;color:var(--text)">${o.cliente||'Anónimo'}</td>
