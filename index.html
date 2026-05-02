@@ -637,17 +637,32 @@ function processBillingData(rows) {
   const validos = rows.filter(r => (r['Estado Hacienda']||'').toString().trim() !== 'Rechazado');
   let total=0, subtotal=0, iva=0;
   const byMonth = {};
+  // Parse number handling both comma (1811914,35) and period (1811914.35) as decimal
+  function parseColones(v) {
+    const s = (v||'0').toString().trim();
+    // If has comma as thousands separator (1.811.914,35) or decimal (1811914,35)
+    const clean = s.replace(/\./g,'').replace(',','.');
+    return parseFloat(clean) || 0;
+  }
+
   validos.forEach(r => {
-    const tCol = parseFloat((r['Total Colones']||'0').toString().replace(/[^0-9.-]/g,'')) || 0;
-    const stCol = parseFloat((r['Subtotal Colones']||'0').toString().replace(/[^0-9.-]/g,'')) || 0;
-    const ivaCol = parseFloat((r['Total IVA Colones']||'0').toString().replace(/[^0-9.-]/g,'')) || 0;
+    const tCol = parseColones(r['Total Colones']);
+    const stCol = parseColones(r['Subtotal Colones']);
+    const ivaCol = parseColones(r['Total IVA Colones']);
     total += tCol; subtotal += stCol; iva += ivaCol;
-    const f2 = (r['Fecha']||'').toString().trim();
-    const parts = f2.split('/');
-    if(parts.length === 3) {
-      const ym = parts[2] + '-' + parts[1].padStart(2,'0');
-      byMonth[ym] = (byMonth[ym]||0) + tCol;
+
+    // Handle date from Sheet (could be ISO or dd/mm/yyyy)
+    const fechaRaw = (r['Fecha']||'').toString().trim();
+    let ym = null;
+    if(fechaRaw.includes('T')) {
+      // ISO format: 2026-02-01T06:00:00.000Z
+      ym = fechaRaw.slice(0,7);
+    } else if(fechaRaw.includes('/')) {
+      // dd/mm/yyyy
+      const parts = fechaRaw.split('/');
+      if(parts.length === 3) ym = parts[2].slice(0,4) + '-' + parts[1].padStart(2,'0');
     }
+    if(ym) byMonth[ym] = (byMonth[ym]||0) + tCol;
   });
   if(total === 0) return;
   billingTotal = total;
@@ -830,17 +845,24 @@ document.getElementById('billing-file').addEventListener('change', function(e){
       let total=0, subtotal=0, iva=0;
       const byMonth = {};
 
+      function parseCol(v) {
+        const s = (v||'0').toString().trim();
+        return parseFloat(s.replace(/\./g,'').replace(',','.')) || 0;
+      }
       validos.forEach(r => {
-        const tCol = parseFloat((r['Total Colones']||'0').replace(/[^0-9.-]/g,'')) || 0;
-        const stCol = parseFloat((r['Subtotal Colones']||'0').replace(/[^0-9.-]/g,'')) || 0;
-        const ivaCol = parseFloat((r['Total IVA Colones']||'0').replace(/[^0-9.-]/g,'')) || 0;
+        const tCol = parseCol(r['Total Colones']);
+        const stCol = parseCol(r['Subtotal Colones']);
+        const ivaCol = parseCol(r['Total IVA Colones']);
         total += tCol; subtotal += stCol; iva += ivaCol;
-        const f = (r['Fecha']||'').toString().trim();
-        const parts = f.split('/');
-        if(parts.length === 3) {
-          const ym = parts[2] + '-' + parts[1].padStart(2,'0');
-          byMonth[ym] = (byMonth[ym]||0) + tCol;
+        const fechaRaw = (r['Fecha']||'').toString().trim();
+        let ym = null;
+        if(fechaRaw.includes('T')) {
+          ym = fechaRaw.slice(0,7);
+        } else if(fechaRaw.includes('/')) {
+          const parts = fechaRaw.split('/');
+          if(parts.length === 3) ym = parts[2].slice(0,4) + '-' + parts[1].padStart(2,'0');
         }
+        if(ym) byMonth[ym] = (byMonth[ym]||0) + tCol;
       });
 
       console.log('Total:', Math.round(total), 'byMonth:', JSON.stringify(byMonth));
