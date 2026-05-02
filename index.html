@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Ventas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg:#0f1117;--bg2:#1a1d27;--bg3:#22263a;--border:rgba(255,255,255,0.07);
+    --text:#f0f0f0;--text2:#8b8fa8;--text3:#5a5e72;
+    --accent:#4f8ef7;--accent2:#1ec98e;--accent3:#f7834f;--accent4:#a78bfa;
+    --red:#f56565;--card-radius:14px;--font:'Inter',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{font-size:15px;}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;}
+  .topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:0 2rem;height:58px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+  .topbar-brand{display:flex;align-items:center;gap:10px;}
+  .topbar-logo{width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .topbar-name{font-weight:600;font-size:15px;letter-spacing:-0.02em;}
+  .topbar-sub{font-size:12px;color:var(--text2);}
+  .topbar-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+  .topbar-controls select{background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:6px 10px;font-size:13px;cursor:pointer;outline:none;}
+  .live-badge{display:flex;align-items:center;gap:5px;background:rgba(30,201,142,0.12);color:var(--accent2);border:1px solid rgba(30,201,142,0.25);border-radius:20px;padding:4px 12px;font-size:12px;font-weight:500;}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:var(--accent2);animation:pulse 2s infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
+  .main{padding:1.5rem 2rem 3rem;max-width:1400px;margin:0 auto;}
+  .section-label{font-size:11px;font-weight:600;letter-spacing:0.08em;color:var(--text3);text-transform:uppercase;margin-bottom:10px;}
+  .metrics-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:1.5rem;}
+  @media(max-width:1100px){.metrics-grid{grid-template-columns:repeat(3,1fr);}}
+  @media(max-width:640px){.metrics-grid{grid-template-columns:repeat(2,1fr);}}
+  .metric-card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--card-radius);padding:16px 18px;position:relative;overflow:hidden;transition:border-color 0.2s;}
+  .metric-card:hover{border-color:rgba(255,255,255,0.15);}
+  .metric-card::after{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--accent-color,var(--accent));border-radius:2px 2px 0 0;}
+  .metric-label{font-size:11px;color:var(--text2);margin-bottom:8px;font-weight:500;letter-spacing:0.03em;}
+  .metric-value{font-size:26px;font-weight:600;letter-spacing:-0.03em;font-family:'DM Mono',monospace;}
+  .metric-sub{font-size:12px;color:var(--text3);margin-top:4px;}
+  .charts-row{display:grid;grid-template-columns:2fr 1.2fr;gap:12px;margin-bottom:12px;}
+  .charts-row2{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:12px;margin-bottom:12px;}
+  .charts-row3{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;}
+  @media(max-width:900px){.charts-row,.charts-row2,.charts-row3{grid-template-columns:1fr;}}
+  .card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--card-radius);padding:18px 20px;}
+  .card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .card-title{font-size:13px;font-weight:500;color:var(--text2);}
+  .card-badge{font-size:11px;padding:3px 8px;border-radius:6px;background:rgba(79,142,247,0.12);color:var(--accent);font-weight:500;}
+  .chart-wrap{position:relative;width:100%;}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:10px;}
+  .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);}
+  .legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0;}
+  .top-list{display:flex;flex-direction:column;gap:10px;}
+  .top-item{display:flex;align-items:center;gap:10px;}
+  .top-rank{font-size:12px;color:var(--text3);min-width:20px;font-family:'DM Mono',monospace;}
+  .top-name{font-size:13px;color:var(--text);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .top-bar-wrap{width:80px;height:5px;background:var(--bg3);border-radius:3px;}
+  .top-bar{height:5px;border-radius:3px;background:var(--accent);}
+  .top-val{font-size:12px;color:var(--text2);min-width:55px;text-align:right;font-family:'DM Mono',monospace;}
+  .billing-card{background:var(--bg2);border:1px dashed rgba(79,142,247,0.3);border-radius:var(--card-radius);padding:18px 20px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+  .billing-info p{font-size:13px;color:var(--text2);margin-top:4px;}
+  .billing-info h3{font-size:14px;font-weight:500;}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;transition:opacity 0.2s;font-family:var(--font);}
+  .btn:hover{opacity:0.85;}
+  .btn-secondary{background:var(--bg3);color:var(--text2);border:1px solid var(--border);}
+  .status-bar{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:8px 14px;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px;margin-bottom:1.5rem;}
+  .loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;gap:16px;transition:opacity 0.4s;}
+  .loading-overlay.hidden{opacity:0;pointer-events:none;}
+  .loader{width:36px;height:36px;border-radius:50%;border:3px solid var(--border);border-top-color:var(--accent);animation:spin 0.8s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .loading-text{font-size:14px;color:var(--text2);}
+  .error-banner{background:rgba(245,101,101,0.1);border:1px solid rgba(245,101,101,0.3);border-radius:10px;padding:14px 18px;font-size:13px;color:var(--red);margin-bottom:1rem;display:none;}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loader">
+  <div class="loader"></div>
+  <p class="loading-text">Cargando datos...</p>
+</div>
+
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-logo">☕</div>
+    <div>
+      <div class="topbar-name">Dashboard de Ventas</div>
+      <div class="topbar-sub" id="last-update">Conectando...</div>
+    </div>
+  </div>
+  <div class="topbar-controls">
+    <select id="year-filter"><option value="all">Todos los años</option></select>
+    <select id="product-filter"><option value="all">Todos los productos</option></select>
+    <select id="month-filter"><option value="all">Todos los meses</option></select>
+    <div class="live-badge"><div class="live-dot"></div>En vivo</div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="error-banner" id="error-banner"></div>
+  <div class="status-bar"><span id="status-text">Cargando registros...</span></div>
+
+  <div class="section-label">Resumen general</div>
+  <div class="metrics-grid">
+    <div class="metric-card" style="--accent-color:var(--accent)">
+      <div class="metric-label">Órdenes totales</div>
+      <div class="metric-value" id="m-orders">—</div>
+      <div class="metric-sub">registros en total</div>
+    </div>
+    <div class="metric-card" style="--accent-color:var(--accent2)">
+      <div class="metric-label">Clientes únicos</div>
+      <div class="metric-value" id="m-clients">—</div>
+      <div class="metric-sub">excluyendo online</div>
+    </div>
+    <div class="metric-card" style="--accent-color:var(--accent3)">
+      <div class="metric-label">Kg tostado total</div>
+      <div class="metric-value" id="m-kg">—</div>
+      <div class="metric-sub" id="m-kg-sub">—</div>
+    </div>
+    <div class="metric-card" style="--accent-color:var(--accent4)">
+      <div class="metric-label">Kg verde total</div>
+      <div class="metric-value" id="m-kgv">—</div>
+      <div class="metric-sub">sin tostar</div>
+    </div>
+    <div class="metric-card" style="--accent-color:#f7cf4f">
+      <div class="metric-label">Ventas en línea (Shopify)</div>
+      <div class="metric-value" id="m-online">—</div>
+      <div class="metric-sub" id="m-online-pct">—</div>
+    </div>
+    <div class="metric-card" style="--accent-color:var(--accent2)">
+      <div class="metric-label">Utilidad proyectada</div>
+      <div class="metric-value" id="m-util">—</div>
+      <div class="metric-sub">35% · requiere facturación</div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Kg tostado por mes + proyección</span>
+        <span class="card-badge">+2 meses</span>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#4f8ef7"></div>Kg tostado</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#1ec98e"></div>Proyección</div>
+      </div>
+      <div class="chart-wrap" style="height:230px">
+        <canvas id="c-kg-mes" role="img" aria-label="Kg tostado por mes con proyección">Kg tostado mensual.</canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Top 8 clientes por kg</span></div>
+      <div class="top-list" id="top-clients"><p style="color:var(--text3);font-size:13px">Cargando...</p></div>
+    </div>
+  </div>
+
+  <div class="charts-row2">
+    <div class="card">
+      <div class="card-header"><span class="card-title">Órdenes acumuladas por mes</span></div>
+      <div class="chart-wrap" style="height:210px">
+        <canvas id="c-acum" role="img" aria-label="Órdenes acumuladas por mes">Acumulado mensual.</canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Ventas por producto</span></div>
+      <div class="chart-wrap" style="height:210px">
+        <canvas id="c-prod" role="img" aria-label="Distribución por producto">Por producto.</canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Órdenes por año</span></div>
+      <div class="chart-wrap" style="height:210px">
+        <canvas id="c-anio" role="img" aria-label="Órdenes por año">Por año.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-row3">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Ventas en línea por mes</span>
+        <span class="card-badge" style="background:rgba(247,207,79,0.12);color:#f7cf4f">Sheet</span>
+      </div>
+      <div class="chart-wrap" style="height:200px">
+        <canvas id="c-online" role="img" aria-label="Ventas online por mes">Online mensual.</canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Kg por cliente — top 10</span></div>
+      <div class="chart-wrap" id="cli-wrap" style="height:200px">
+        <canvas id="c-cli-kg" role="img" aria-label="Kg por cliente top 10">Kg por cliente.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-label" style="margin-top:1.5rem">Ventas en línea — Shopify</div>
+  <div class="metrics-grid" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px;">
+    <div class="metric-card" style="--accent-color:#f7cf4f">
+      <div class="metric-label">Total facturado online</div>
+      <div class="metric-value" id="sh-total">—</div>
+      <div class="metric-sub">colones</div>
+    </div>
+    <div class="metric-card" style="--accent-color:var(--accent2)">
+      <div class="metric-label">Órdenes online</div>
+      <div class="metric-value" id="sh-orders">—</div>
+      <div class="metric-sub" id="sh-period">cargando...</div>
+    </div>
+    <div class="metric-card" style="--accent-color:var(--accent3)">
+      <div class="metric-label">Ticket promedio</div>
+      <div class="metric-value" id="sh-avg">—</div>
+      <div class="metric-sub">por orden</div>
+    </div>
+    <div class="metric-card" style="--accent-color:var(--accent4)">
+      <div class="metric-label">Utilidad proyectada online</div>
+      <div class="metric-value" id="sh-util">—</div>
+      <div class="metric-sub">35% margen</div>
+    </div>
+  </div>
+
+  <div class="charts-row" style="margin-bottom:12px;">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Ventas online por mes (₡)</span>
+        <span class="card-badge" style="background:rgba(247,207,79,0.12);color:#f7cf4f">Shopify</span>
+      </div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="c-sh-mes" role="img" aria-label="Ventas Shopify por mes">Ventas online mensuales.</canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Productos más vendidos online</span>
+      </div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="c-sh-prod" role="img" aria-label="Productos más vendidos online">Top productos online.</canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-header">
+      <span class="card-title">Órdenes recientes — Shopify</span>
+      <span class="card-badge" style="background:rgba(247,207,79,0.12);color:#f7cf4f" id="sh-sync">Sincronizando...</span>
+    </div>
+    <div id="sh-table" style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="color:var(--text3);text-align:left;border-bottom:1px solid var(--border);">
+            <th style="padding:8px 10px;font-weight:500;">Cliente</th>
+            <th style="padding:8px 10px;font-weight:500;">Productos</th>
+            <th style="padding:8px 10px;font-weight:500;">Fecha</th>
+            <th style="padding:8px 10px;font-weight:500;text-align:right;">Total</th>
+            <th style="padding:8px 10px;font-weight:500;">Estado</th>
+          </tr>
+        </thead>
+        <tbody id="sh-tbody">
+          <tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text3)">Cargando órdenes...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section-label" style="margin-top:1.5rem">Facturación electrónica</div>
+  <div class="billing-card">
+    <div class="billing-info">
+      <h3 id="billing-title">Facturación electrónica — <span style="color:var(--accent)">pendiente</span></h3>
+      <p>Subí el reporte de facturaelectronica.cr (.xlsx) para activar ventas en colones y utilidad real</p>
+      <span id="billing-status" style="font-size:12px;color:var(--accent2);display:block;margin-top:4px;"></span>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="file" id="billing-file" accept=".xlsx,.csv" style="display:none">
+      <button class="btn" onclick="document.getElementById('billing-file').click()">Subir reporte XLSX</button>
+    </div>
+  </div>
+  <div id="billing-chart-wrap" style="display:none;margin-bottom:12px;">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Facturación por mes (₡)</span>
+        <span class="card-badge" style="background:rgba(167,139,250,0.12);color:var(--accent4)">facturaelectronica.cr</span>
+      </div>
+      <div class="chart-wrap" style="height:220px">
+        <canvas id="c-billing" role="img" aria-label="Facturación mensual">Facturación mensual.</canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQbcwQFH48NTeiKDvwI4Sn_7ti5s1prCFnLRqrpKLOR3W4-EUnEUF2zKZrDgqGpbev1UIpBEL9octR/pub?gid=1572772894&single=true&output=csv';
+const SHOPIFY_API = 'https://script.google.com/macros/s/AKfycbyq76emTHdsfHNpJ1DSUHZ9wI-KA2efpXLDXLdkE195F7HUldUPJ9UVCLjo3yLqgjIm4Q/exec';
+const MARGIN = 0.35;
+let allRows = [], charts = {}, billingTotal = null, billingByMonth = {}, shopifyOrders = [];
+
+const MES_MAP = {january:'Enero',february:'Febrero',march:'Marzo',april:'Abril',may:'Mayo',june:'Junio',july:'Julio',august:'Agosto',september:'Setiembre',october:'Octubre',november:'Noviembre',december:'Diciembre'};
+const MES_NUM = {january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
+
+// Acceso robusto: normaliza tildes, espacios, mayúsculas
+function norm(k){ return k.toString().trim().toLowerCase().replace(/\s+/g,'').replace(/[áàä]/g,'a').replace(/[éèë]/g,'e').replace(/[íìï]/g,'i').replace(/[óòö]/g,'o').replace(/[úùü]/g,'u').replace(/ñ/g,'n'); }
+function f(row,key){ const nk=norm(key); for(const k of Object.keys(row)){ if(norm(k)===nk) return row[k]; } return ''; }
+function num(row,key){ const v=f(row,key); if(v===''||v===null||v===undefined) return 0; return parseFloat(v.toString().replace(/[^0-9.,-]/g,'').replace(',','.')) || 0; }
+
+function getProduct(row){
+  const u=f(row,'Unidad').toString().trim().toLowerCase();
+  const r=f(row,'Region').toString().trim(); // normalizado quita tilde
+  if(['s','m','l','xl','xxl'].includes(u)) return r||'Camiseta';
+  if(u==='und') return r||'Chocolate';
+  return r||'Café';
+}
+
+function parseFecha(str) {
+  if(!str) return null;
+  // Try direct parse first
+  let dt = new Date(str);
+  if(!isNaN(dt)) return dt;
+  // Handle "29-April-2026" or "29-Apr-2026" format
+  const months = {january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12,jan:1,feb:2,mar:3,apr:4,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  const m = str.match(/(\d{1,2})[-\/](\w+)[-\/](\d{4})/);
+  if(m) {
+    const mn = months[m[2].toLowerCase()];
+    if(mn) return new Date(parseInt(m[3]), mn-1, parseInt(m[1]));
+  }
+  return null;
+}
+
+function getYearMonth(row){
+  const anio=f(row,'Ano').toString().trim();
+  const mes=f(row,'Mes').toString().trim().toLowerCase();
+  const anioNum=parseInt(anio);
+  if(anio && mes && MES_NUM[mes] && anioNum>=2015 && anioNum<=2030){
+    return `${anio}-${String(MES_NUM[mes]).padStart(2,'0')}`;
+  }
+  // Try to get year from Fecha de orden
+  const fechaStr=f(row,'Fecha de orden');
+  const dt=parseFecha(fechaStr);
+  if(!dt) {
+    // Fallback: use Mes + try to find year from Fecha
+    if(mes && MES_NUM[mes]) {
+      const yearMatch = (fechaStr||'').match(/\d{4}/);
+      if(yearMatch) {
+        const yr = parseInt(yearMatch[0]);
+        if(yr>=2015&&yr<=2030) return `${yr}-${String(MES_NUM[mes]).padStart(2,'0')}`;
+      }
+    }
+    return null;
+  }
+  const yr=dt.getFullYear();
+  if(yr<2015||yr>2030) return null;
+  // If we have the month name, prefer it for accuracy
+  if(mes && MES_NUM[mes]) return `${yr}-${String(MES_NUM[mes]).padStart(2,'0')}`;
+  return `${yr}-${String(dt.getMonth()+1).padStart(2,'0')}`;
+}
+
+function getMesLabel(ym){
+  if(!ym) return '';
+  const [y,m]=ym.split('-');
+  const meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Set','Oct','Nov','Dic'];
+  return `${meses[parseInt(m)-1]} ${y}`;
+}
+
+function isOnline(row){
+  const c=f(row,'Cliente').toString().toLowerCase().trim();
+  return c.includes('linea')||c.includes('online')||c.includes('shopify')||c.includes('web');
+}
+
+function fmtKg(n){ n=Math.round(n*10)/10; return n>=1000?(n/1000).toFixed(2)+' t':n+' kg'; }
+function fmtNum(n){ return Math.round(n).toLocaleString('es-CR'); }
+
+function filterRows(){
+  const y=document.getElementById('year-filter').value;
+  const p=document.getElementById('product-filter').value;
+  const m=document.getElementById('month-filter').value;
+  return allRows.filter(row=>{
+    const yr=f(row,'Ano').toString().trim();
+    const yrNum=parseInt(yr);
+    const pr=getProduct(row);
+    const mes=f(row,'Mes').toString().trim().toLowerCase();
+    if(y==='all' && (yrNum<2015||yrNum>2030)) return false;
+    return (y==='all'||yr===y)&&(p==='all'||pr===p)&&(m==='all'||mes===m);
+  });
+}
+
+function destroyChart(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+const COLORS=['#4f8ef7','#1ec98e','#f7834f','#a78bfa','#f7cf4f','#f56565','#34d399','#fb923c','#60a5fa','#c084fc'];
+
+function buildAll(rows){
+  const onlineRows=rows.filter(isOnline);
+  const offlineRows=rows.filter(r=>!isOnline(r));
+  const totalOrds=rows.length;
+  const clients=new Set(offlineRows.map(r=>f(r,'Cliente')).filter(Boolean)).size;
+  const totalKgT=rows.reduce((a,r)=>a+num(r,'Kg tostado'),0);
+  const totalKgV=rows.reduce((a,r)=>a+num(r,'Kg Verde'),0);
+  const onlinePct=totalOrds?Math.round(onlineRows.length/totalOrds*100):0;
+
+  document.getElementById('m-orders').textContent=fmtNum(totalOrds);
+  document.getElementById('m-clients').textContent=fmtNum(clients);
+  document.getElementById('m-kg').textContent=fmtKg(totalKgT);
+  document.getElementById('m-kg-sub').textContent=`${fmtKg(totalKgV)} verde`;
+  document.getElementById('m-kgv').textContent=fmtKg(totalKgV);
+  document.getElementById('m-online').textContent=fmtNum(onlineRows.length);
+  document.getElementById('m-online-pct').textContent=`${onlinePct}% del total`;
+  document.getElementById('m-util').textContent=billingTotal?'₡'+fmtNum(billingTotal*MARGIN):'—';
+
+  // Kg tostado por mes + proyección
+  const monthKg={};
+  rows.forEach(r=>{ const ym=getYearMonth(r); if(ym) monthKg[ym]=(monthKg[ym]||0)+num(r,'Kg tostado'); });
+  const sortedM=Object.keys(monthKg).sort();
+  const kgVals=sortedM.map(m=>Math.round(monthKg[m]*10)/10);
+  const avg=kgVals.length?kgVals.reduce((a,b)=>a+b,0)/kgVals.length:0;
+  const projLabels=sortedM.map(getMesLabel);
+  if(sortedM.length){ const last=new Date(sortedM[sortedM.length-1]+'-01'); for(let i=1;i<=2;i++){ const d=new Date(last); d.setMonth(d.getMonth()+i); projLabels.push(getMesLabel(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`)); } }
+  const projOnly=projLabels.map((_,i)=>i>=kgVals.length?Math.round(avg*(1+0.04*(i-kgVals.length+1))*10)/10:null);
+
+  destroyChart('kgmes');
+  charts['kgmes']=new Chart(document.getElementById('c-kg-mes'),{
+    type:'bar',
+    data:{ labels:projLabels, datasets:[
+      {label:'Kg tostado',data:kgVals,backgroundColor:'#4f8ef7',borderRadius:4},
+      {label:'Proyección',data:projOnly,backgroundColor:'rgba(30,201,142,0.55)',borderRadius:4}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a5e72',font:{size:10},maxRotation:45,autoSkip:true},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#5a5e72',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}}}}
+  });
+
+  // Acumulado
+  const monthCnt={};
+  rows.forEach(r=>{ const ym=getYearMonth(r); if(ym) monthCnt[ym]=(monthCnt[ym]||0)+1; });
+  const acumM=Object.keys(monthCnt).sort(); let cum=0;
+  const acumV=acumM.map(m=>{ cum+=monthCnt[m]; return cum; });
+
+  destroyChart('acum');
+  charts['acum']=new Chart(document.getElementById('c-acum'),{
+    type:'line',
+    data:{labels:acumM.map(getMesLabel),datasets:[{label:'Acumulado',data:acumV,borderColor:'#4f8ef7',backgroundColor:'rgba(79,142,247,0.1)',fill:true,tension:0.3,pointRadius:3,pointBackgroundColor:'#4f8ef7'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a5e72',font:{size:10},maxRotation:45,autoSkip:true},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#5a5e72',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}}}}
+  });
+
+  // Por producto
+  const prodKg={};
+  rows.forEach(r=>{ const p=getProduct(r); prodKg[p]=(prodKg[p]||0)+num(r,'Kg tostado')+num(r,'Cantidad'); });
+  const pLabels=Object.keys(prodKg).sort((a,b)=>prodKg[b]-prodKg[a]);
+
+  destroyChart('prod');
+  charts['prod']=new Chart(document.getElementById('c-prod'),{
+    type:'doughnut',
+    data:{labels:pLabels,datasets:[{data:pLabels.map(p=>Math.round(prodKg[p]*10)/10),backgroundColor:COLORS.slice(0,pLabels.length),borderWidth:2,borderColor:'#1a1d27'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa8',font:{size:11},boxWidth:12,padding:10}}},cutout:'60%'}
+  });
+
+  // Por año
+  const anioC={};
+  rows.forEach(r=>{ const y=(f(r,'Ano')||'').toString().trim(); const yn=parseInt(y); if(y && yn>=2015 && yn<=2030) anioC[y]=(anioC[y]||0)+1; });
+  const aLabels=Object.keys(anioC).filter(Boolean).sort();
+
+  destroyChart('anio');
+  charts['anio']=new Chart(document.getElementById('c-anio'),{
+    type:'doughnut',
+    data:{labels:aLabels,datasets:[{data:aLabels.map(y=>anioC[y]),backgroundColor:COLORS.slice(0,aLabels.length),borderWidth:2,borderColor:'#1a1d27'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:'#8b8fa8',font:{size:11},boxWidth:12,padding:10}}},cutout:'60%'}
+  });
+
+  // Online por mes
+  const onM={};
+  onlineRows.forEach(r=>{ const ym=getYearMonth(r); if(ym) onM[ym]=(onM[ym]||0)+1; });
+  const omLabels=Object.keys(onM).sort();
+
+  destroyChart('online');
+  charts['online']=new Chart(document.getElementById('c-online'),{
+    type:'bar',
+    data:{labels:omLabels.map(getMesLabel),datasets:[{label:'Online',data:omLabels.map(m=>onM[m]),backgroundColor:'rgba(247,207,79,0.7)',borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a5e72',font:{size:10},maxRotation:45},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#5a5e72',font:{size:11}},grid:{color:'rgba(255,255,255,0.04)'}}}}
+  });
+
+  // Top 8 clientes
+  const cliKg={};
+  offlineRows.forEach(r=>{ const c=f(r,'Cliente'); if(!c) return; cliKg[c]=(cliKg[c]||0)+num(r,'Kg tostado'); });
+  const top8=Object.entries(cliKg).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxKg=top8[0]?.[1]||1;
+  document.getElementById('top-clients').innerHTML=top8.length
+    ?top8.map(([c,kg],i)=>`<div class="top-item"><span class="top-rank">${i+1}</span><span class="top-name" title="${c}">${c}</span><div class="top-bar-wrap"><div class="top-bar" style="width:${Math.round(kg/maxKg*100)}%"></div></div><span class="top-val">${fmtKg(kg)}</span></div>`).join('')
+    :'<p style="color:var(--text3);font-size:13px">Sin datos</p>';
+
+  // Kg por cliente top 10
+  const top10=Object.entries(cliKg).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const hh=Math.max(220,top10.length*36+40);
+  document.getElementById('cli-wrap').style.height=hh+'px';
+
+  destroyChart('clikg');
+  charts['clikg']=new Chart(document.getElementById('c-cli-kg'),{
+    type:'bar',
+    data:{labels:top10.map(([c])=>c.length>18?c.slice(0,18)+'…':c),datasets:[{label:'Kg',data:top10.map(([,kg])=>Math.round(kg*10)/10),backgroundColor:'#4f8ef7',borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a5e72',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}},y:{ticks:{color:'#8b8fa8',font:{size:10}},grid:{display:false}}}}
+  });
+}
+
+function populateFilters(rows){
+  const years=[...new Set(rows.map(r=>f(r,'Ano').toString().trim()).filter(y=>{ const n=parseInt(y); return y && n>=2015 && n<=2030; }))].sort();
+  document.getElementById('year-filter').innerHTML='<option value="all">Todos los años</option>'+years.map(y=>`<option value="${y}">${y}</option>`).join('');
+
+  const prods=[...new Set(rows.map(getProduct).filter(Boolean))].sort();
+  document.getElementById('product-filter').innerHTML='<option value="all">Todos los productos</option>'+prods.map(p=>`<option value="${p}">${p}</option>`).join('');
+
+  const meses=[...new Set(rows.map(r=>f(r,'Mes').toString().trim().toLowerCase()).filter(Boolean))];
+  const mesesOrd=Object.keys(MES_MAP).filter(m=>meses.includes(m));
+  document.getElementById('month-filter').innerHTML='<option value="all">Todos los meses</option>'+mesesOrd.map(m=>`<option value="${m}">${MES_MAP[m]}</option>`).join('');
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split('\n');
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+  return lines.slice(1).map(line => {
+    // Handle quoted fields with commas inside
+    const vals = [];
+    let cur = '', inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      if (line[i] === '"') { inQ = !inQ; }
+      else if (line[i] === ',' && !inQ) { vals.push(cur.trim()); cur = ''; }
+      else { cur += line[i]; }
+    }
+    vals.push(cur.trim());
+    const obj = {};
+    headers.forEach((h, i) => obj[h] = (vals[i] || '').replace(/^"|"$/g,'').trim());
+    return obj;
+  }).filter(r => {
+    const c = Object.values(r).some(v => v !== '');
+    return c;
+  });
+}
+
+async function loadData(){
+  try{
+    const res = await fetch(CSV_URL);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    const parsed = parseCSV(text);
+    allRows = parsed.filter(r => f(r,'Cliente').toString().trim());
+    const now = new Date().toLocaleDateString('es-CR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    document.getElementById('last-update').textContent=`Actualizado ${now}`;
+    document.getElementById('status-text').textContent=`${fmtNum(allRows.length)} registros cargados · Google Sheets`;
+    populateFilters(allRows);
+    buildAll(filterRows());
+    document.getElementById('loader').classList.add('hidden');
+  }catch(e){
+    document.getElementById('loader').classList.add('hidden');
+    const eb=document.getElementById('error-banner');
+    eb.style.display='block';
+    eb.textContent=`Error al cargar datos: ${e.message}`;
+    document.getElementById('status-text').textContent='Error de conexión';
+  }
+}
+
+function buildShopify(orders) {
+  if(!orders.length) return;
+  const total = orders.reduce((a,o)=>a+parseFloat(o.total||0),0);
+  const avg = total/orders.length;
+  const oldest = orders.reduce((a,o)=>o.fecha<a?o.fecha:a, orders[0].fecha);
+  const newest = orders.reduce((a,o)=>o.fecha>a?o.fecha:a, orders[0].fecha);
+  const d1 = new Date(oldest).toLocaleDateString('es-CR',{month:'short',year:'numeric'});
+  const d2 = new Date(newest).toLocaleDateString('es-CR',{month:'short',year:'numeric'});
+
+  document.getElementById('sh-total').textContent = '₡'+fmtNum(total);
+  document.getElementById('sh-orders').textContent = fmtNum(orders.length);
+  document.getElementById('sh-period').textContent = `${d1} – ${d2}`;
+  document.getElementById('sh-avg').textContent = '₡'+fmtNum(avg);
+  document.getElementById('sh-util').textContent = '₡'+fmtNum(total*MARGIN);
+  document.getElementById('sh-sync').textContent = 'En vivo ✓';
+
+  // Ventas por mes
+  const byMonth = {};
+  orders.forEach(o=>{
+    const d=new Date(o.fecha);
+    const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    byMonth[ym]=(byMonth[ym]||0)+parseFloat(o.total||0);
+  });
+  const mLabels=Object.keys(byMonth).sort();
+
+  destroyChart('shmes');
+  charts['shmes']=new Chart(document.getElementById('c-sh-mes'),{
+    type:'bar',
+    data:{labels:mLabels.map(getMesLabel),datasets:[{label:'Ventas ₡',data:mLabels.map(m=>Math.round(byMonth[m])),backgroundColor:'rgba(247,207,79,0.7)',borderRadius:4}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a5e72',font:{size:10},maxRotation:45}},y:{beginAtZero:true,ticks:{color:'#5a5e72',font:{size:11},callback:v=>v>=1000?'₡'+fmtNum(v):'₡'+v}}}}
+  });
+
+  // Productos top
+  const prodCount={};
+  orders.forEach(o=>{
+    (o.productos||'').split(',').forEach(p=>{
+      const t=p.trim(); if(t) prodCount[t]=(prodCount[t]||0)+1;
+    });
+  });
+  const topProds=Object.entries(prodCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  destroyChart('shprod');
+  charts['shprod']=new Chart(document.getElementById('c-sh-prod'),{
+    type:'bar',
+    data:{labels:topProds.map(([p])=>p.length>16?p.slice(0,16)+'…':p),datasets:[{label:'Órdenes',data:topProds.map(([,n])=>n),backgroundColor:'#4f8ef7',borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:'#5a5e72',font:{size:10}}},y:{ticks:{color:'#8b8fa8',font:{size:10}}}}}
+  });
+
+  // Tabla órdenes recientes
+  const recent=orders.slice(0,15);
+  document.getElementById('sh-tbody').innerHTML=recent.map(o=>`
+    <tr style="border-bottom:0.5px solid var(--border);">
+      <td style="padding:8px 10px;color:var(--text)">${o.cliente||'Anónimo'}</td>
+      <td style="padding:8px 10px;color:var(--text2);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${o.productos}">${o.productos||'—'}</td>
+      <td style="padding:8px 10px;color:var(--text2)">${new Date(o.fecha).toLocaleDateString('es-CR')}</td>
+      <td style="padding:8px 10px;color:var(--text);text-align:right;font-family:'DM Mono',monospace">₡${fmtNum(parseFloat(o.total||0))}</td>
+      <td style="padding:8px 10px"><span style="font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(30,201,142,0.12);color:var(--accent2)">${o.estado||'—'}</span></td>
+    </tr>`).join('');
+}
+
+async function loadShopify(){
+  try{
+    const res=await fetch(SHOPIFY_API);
+    const data=await res.json();
+    if(Array.isArray(data)&&data.length){
+      shopifyOrders=data;
+      buildShopify(data);
+      // Update online metrics in main section
+      const shTotal=data.reduce((a,o)=>a+parseFloat(o.total||0),0);
+      document.getElementById('m-online').textContent='₡'+fmtNum(shTotal);
+      document.getElementById('m-online-pct').textContent=fmtNum(data.length)+' órdenes · Shopify';
+    }
+  }catch(e){ document.getElementById('sh-sync').textContent='Error Shopify'; }
+}
+
+['year-filter','product-filter','month-filter'].forEach(id=>{
+  document.getElementById(id).addEventListener('change',()=>buildAll(filterRows()));
+});
+
+function buildBillingChart(byMonth) {
+  const mLabels = Object.keys(byMonth).sort();
+  if(!mLabels.length) return;
+  const container = document.getElementById('billing-chart-wrap');
+  if(container) container.style.display='block';
+  const existing = Chart.getChart('c-billing');
+  if(existing) existing.destroy();
+  new Chart(document.getElementById('c-billing'), {
+    type:'bar',
+    data:{
+      labels: mLabels.map(getMesLabel),
+      datasets:[{
+        label:'Facturación ₡',
+        data: mLabels.map(m => Math.round(byMonth[m])),
+        backgroundColor:'rgba(167,139,250,0.7)',
+        borderRadius:4
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'#5a5e72',font:{size:10},maxRotation:45}},
+        y:{ticks:{color:'#5a5e72',font:{size:11},callback:v=>'₡'+fmtNum(v)}}
+      }
+    }
+  });
+}
+
+document.getElementById('billing-file').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  e.target.value = '';
+
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      const wb = XLSX.read(ev.target.result, {type:'binary'});
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {raw:false});
+
+      const validos = rows.filter(r => (r['Estado Hacienda']||'').toString().trim() !== 'Rechazado');
+      console.log('Billing rows:', validos.length);
+
+      let total=0, subtotal=0, iva=0;
+      const byMonth = {};
+
+      validos.forEach(r => {
+        const tCol = parseFloat((r['Total Colones']||'0').replace(/[^0-9.-]/g,'')) || 0;
+        const stCol = parseFloat((r['Subtotal Colones']||'0').replace(/[^0-9.-]/g,'')) || 0;
+        const ivaCol = parseFloat((r['Total IVA Colones']||'0').replace(/[^0-9.-]/g,'')) || 0;
+        total += tCol; subtotal += stCol; iva += ivaCol;
+        const f = (r['Fecha']||'').toString().trim();
+        const parts = f.split('/');
+        if(parts.length === 3) {
+          const ym = parts[2] + '-' + parts[1].padStart(2,'0');
+          byMonth[ym] = (byMonth[ym]||0) + tCol;
+        }
+      });
+
+      console.log('Total:', Math.round(total), 'byMonth:', JSON.stringify(byMonth));
+
+      billingTotal = total;
+      billingByMonth = byMonth;
+      document.getElementById('billing-status').textContent =
+        '✓ ' + fmtNum(validos.length) + ' facturas · ₡' + fmtNum(subtotal) + ' subtotal · IVA ₡' + fmtNum(iva) + ' · Total ₡' + fmtNum(total);
+      document.getElementById('m-util').textContent = '₡' + fmtNum(total * MARGIN);
+      buildBillingChart(byMonth);
+    } catch(err) { console.error('Billing error:', err); }
+  };
+  reader.readAsBinaryString(file);
+});
+
+
+loadData();
+loadShopify();
+</script>
+</body>
+</html>
