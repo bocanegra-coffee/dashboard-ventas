@@ -313,7 +313,7 @@
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQbcwQFH48NTeiKDvwI4Sn_7ti5s1prCFnLRqrpKLOR3W4-EUnEUF2zKZrDgqGpbev1UIpBEL9octR/pub?gid=1572772894&single=true&output=csv';
 const SHOPIFY_API = 'https://script.google.com/macros/s/AKfycbyq76emTHdsfHNpJ1DSUHZ9wI-KA2efpXLDXLdkE195F7HUldUPJ9UVCLjo3yLqgjIm4Q/exec';
 const MARGIN = 0.35;
-let allRows = [], charts = {}, billingTotal = null, billingByMonth = {}, shopifyOrders = [];
+let allRows = [], charts = {}, billingTotal = null, billingByMonth = {}, billingValidos = 0, shopifyOrders = [];
 
 const MES_MAP = {january:'Enero',february:'Febrero',march:'Marzo',april:'Abril',may:'Mayo',june:'Junio',july:'Julio',august:'Agosto',september:'Setiembre',october:'Octubre',november:'Noviembre',december:'Diciembre'};
 const MES_NUM = {january:1,february:2,march:3,april:4,may:5,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
@@ -719,6 +719,16 @@ async function loadShopify(){
   document.getElementById(id).addEventListener('change',()=>buildAll(filterRows()));
 });
 
+function updateBillingBanner() {
+  if(!billingTotal || !Object.keys(billingByMonth).length) return;
+  const curYr = new Date().getFullYear().toString();
+  const curYrTotal = Object.entries(billingByMonth)
+    .filter(([k]) => k.startsWith(curYr))
+    .reduce((a, [, v]) => a + v, 0);
+  document.getElementById('banner-ventas').textContent = '₡' + fmtNum(curYrTotal > 0 ? curYrTotal : billingTotal);
+  document.getElementById('banner-ventas-sub').textContent = fmtNum(billingValidos) + ' facturas · ' + curYr;
+}
+
 function buildBillingChart(byMonth) {
   const mLabels = Object.keys(byMonth).sort();
   if(!mLabels.length) return;
@@ -783,18 +793,13 @@ document.getElementById('billing-file').addEventListener('change', function(e){
 
       billingTotal = total;
       billingByMonth = byMonth;
+      billingValidos = validos.length;
+
+      // Update all UI — synchronously before anything can interrupt
       document.getElementById('billing-status').textContent =
         '✓ ' + fmtNum(validos.length) + ' facturas · ₡' + fmtNum(subtotal) + ' subtotal · IVA ₡' + fmtNum(iva) + ' · Total ₡' + fmtNum(total);
       document.getElementById('m-util').textContent = '₡' + fmtNum(total * MARGIN);
-
-      // Update banner with current year total
-      const curYr = new Date().getFullYear().toString();
-      const curYrTotal = Object.entries(byMonth)
-        .filter(([k]) => k.startsWith(curYr))
-        .reduce((a, [, v]) => a + v, 0);
-      document.getElementById('banner-ventas').textContent = '₡' + fmtNum(curYrTotal > 0 ? curYrTotal : total);
-      document.getElementById('banner-ventas-sub').textContent = fmtNum(validos.length) + ' facturas · ' + curYr;
-
+      updateBillingBanner();
       buildBillingChart(byMonth);
     } catch(err) { console.error('Billing error:', err); }
   };
