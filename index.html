@@ -310,6 +310,7 @@
 </div>
 
 <script>
+const SHEET_API = 'https://script.google.com/macros/s/AKfycbxlNZ8WzzPpt_tlFEojgm09449Ol1WNmZdjD0CAouIVCPB2PRArWtxE51xOj6jzN6CgJA/exec';
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQbcwQFH48NTeiKDvwI4Sn_7ti5s1prCFnLRqrpKLOR3W4-EUnEUF2zKZrDgqGpbev1UIpBEL9octR/pub?gid=1572772894&single=true&output=csv';
 const SHOPIFY_API = 'https://script.google.com/macros/s/AKfycbyq76emTHdsfHNpJ1DSUHZ9wI-KA2efpXLDXLdkE195F7HUldUPJ9UVCLjo3yLqgjIm4Q/exec';
 const MARGIN = 0.35;
@@ -589,11 +590,34 @@ function parseCSV(text) {
 
 async function loadData(){
   try{
-    const res = await fetch(CSV_URL);
-    if(!res.ok) throw new Error(`HTTP ${res.status}`);
-    const text = await res.text();
-    const parsed = parseCSV(text);
-    allRows = parsed.filter(r => f(r,'Cliente').toString().trim());
+    // Try SHEET_API first (returns both pedidos and facturacion)
+    let pedidosRows = [];
+    let facRows = [];
+    try {
+      const res = await fetch(SHEET_API);
+      if(res.ok) {
+        const data = await res.json();
+        if(data.pedidos && Array.isArray(data.pedidos)) {
+          pedidosRows = data.pedidos;
+        }
+        if(data.facturacion && Array.isArray(data.facturacion) && data.facturacion.length > 0) {
+          facRows = data.facturacion;
+          processBillingData(facRows);
+        }
+      }
+    } catch(apiErr) {
+      console.log('SHEET_API failed, falling back to CSV:', apiErr.message);
+    }
+
+    // Fallback to CSV if needed
+    if(!pedidosRows.length) {
+      const res = await fetch(CSV_URL);
+      if(!res.ok) throw new Error(`HTTP ${res.status}`);
+      const text = await res.text();
+      pedidosRows = parseCSV(text);
+    }
+
+    allRows = pedidosRows.filter(r => f(r,'Cliente').toString().trim());
     const now = new Date().toLocaleDateString('es-CR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
     document.getElementById('last-update').textContent=`Actualizado ${now}`;
     document.getElementById('status-text').textContent=`${fmtNum(allRows.length)} registros cargados · Google Sheets`;
@@ -607,6 +631,36 @@ async function loadData(){
     eb.textContent=`Error al cargar datos: ${e.message}`;
     document.getElementById('status-text').textContent='Error de conexión';
   }
+}
+
+function processBillingData(rows) {
+  const validos = rows.filter(r => (r['Estado Hacienda']||'').toString().trim() !== 'Rechazado');
+  let total=0, subtotal=0, iva=0;
+  const byMonth = {};
+  validos.forEach(r => {
+    const tCol = parseFloat((r['Total Colones']||'0').toString().replace(/[^0-9.-]/g,'')) || 0;
+    const stCol = parseFloat((r['Subtotal Colones']||'0').toString().replace(/[^0-9.-]/g,'')) || 0;
+    const ivaCol = parseFloat((r['Total IVA Colones']||'0').toString().replace(/[^0-9.-]/g,'')) || 0;
+    total += tCol; subtotal += stCol; iva += ivaCol;
+    const f2 = (r['Fecha']||'').toString().trim();
+    const parts = f2.split('/');
+    if(parts.length === 3) {
+      const ym = parts[2] + '-' + parts[1].padStart(2,'0');
+      byMonth[ym] = (byMonth[ym]||0) + tCol;
+    }
+  });
+  if(total === 0) return;
+  billingTotal = total;
+  billingByMonth = byMonth;
+  billingValidos = validos.length;
+  document.getElementById('billing-status').textContent =
+    '✓ ' + fmtNum(validos.length) + ' facturas · ₡' + fmtNum(subtotal) + ' subtotal · IVA ₡' + fmtNum(iva) + ' · Total ₡' + fmtNum(total);
+  document.getElementById('m-util').textContent = '₡' + fmtNum(total * MARGIN);
+  updateBillingBanner();
+  buildBillingChart(byMonth);
+  // Update billing card title
+  const title = document.getElementById('billing-title');
+  if(title) title.innerHTML = 'Facturación electrónica — <span style="color:var(--accent2)">conectada ✓</span>';
 }
 
 function buildShopify(orders) {
