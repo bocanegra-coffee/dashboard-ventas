@@ -637,12 +637,23 @@ function processBillingData(rows) {
   const validos = rows.filter(r => (r['Estado Hacienda']||'').toString().trim() !== 'Rechazado');
   let total=0, subtotal=0, iva=0;
   const byMonth = {};
-  // Parse number handling both comma (1811914,35) and period (1811914.35) as decimal
+  // Smart number parser for Costa Rican format
+  // "1811914,35" → 1811914.35 (comma=decimal, no thousands sep)
+  // "1.811.914,35" → 1811914.35 (dot=thousands, comma=decimal)
+  // "1811914.35" → 1811914.35 (US format)
   function parseColones(v) {
-    const s = (v||'0').toString().trim();
-    // If has comma as thousands separator (1.811.914,35) or decimal (1811914,35)
-    const clean = s.replace(/\./g,'').replace(',','.');
-    return parseFloat(clean) || 0;
+    const s = (v||'0').toString().trim().replace(/\s/g,'');
+    if(!s || s === '-') return 0;
+    const lastComma = s.lastIndexOf(',');
+    const lastDot = s.lastIndexOf('.');
+    if(lastComma > lastDot) {
+      // Comma is decimal separator: "1.811.914,35" or "1811914,35"
+      return parseFloat(s.replace(/\./g,'').replace(',','.')) || 0;
+    } else if(lastDot > lastComma) {
+      // Dot is decimal separator: "1,811,914.35" or "1811914.35"
+      return parseFloat(s.replace(/,/g,'')) || 0;
+    }
+    return parseFloat(s.replace(/[^0-9-]/g,'')) || 0;
   }
 
   validos.forEach(r => {
@@ -846,8 +857,16 @@ document.getElementById('billing-file').addEventListener('change', function(e){
       const byMonth = {};
 
       function parseCol(v) {
-        const s = (v||'0').toString().trim();
-        return parseFloat(s.replace(/\./g,'').replace(',','.')) || 0;
+        const s = (v||'0').toString().trim().replace(/\s/g,'');
+        if(!s || s === '-') return 0;
+        const lastComma = s.lastIndexOf(',');
+        const lastDot = s.lastIndexOf('.');
+        if(lastComma > lastDot) {
+          return parseFloat(s.replace(/\./g,'').replace(',','.')) || 0;
+        } else if(lastDot > lastComma) {
+          return parseFloat(s.replace(/,/g,'')) || 0;
+        }
+        return parseFloat(s.replace(/[^0-9-]/g,'')) || 0;
       }
       validos.forEach(r => {
         const tCol = parseCol(r['Total Colones']);
