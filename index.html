@@ -786,6 +786,15 @@ document.getElementById('billing-file').addEventListener('change', function(e){
       document.getElementById('billing-status').textContent =
         '✓ ' + fmtNum(validos.length) + ' facturas · ₡' + fmtNum(subtotal) + ' subtotal · IVA ₡' + fmtNum(iva) + ' · Total ₡' + fmtNum(total);
       document.getElementById('m-util').textContent = '₡' + fmtNum(total * MARGIN);
+
+      // Update banner with current year total
+      const curYr = new Date().getFullYear().toString();
+      const curYrTotal = Object.entries(byMonth)
+        .filter(([k]) => k.startsWith(curYr))
+        .reduce((a, [, v]) => a + v, 0);
+      document.getElementById('banner-ventas').textContent = '₡' + fmtNum(curYrTotal > 0 ? curYrTotal : total);
+      document.getElementById('banner-ventas-sub').textContent = fmtNum(validos.length) + ' facturas · ' + curYr;
+
       buildBillingChart(byMonth);
     } catch(err) { console.error('Billing error:', err); }
   };
