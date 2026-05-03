@@ -587,40 +587,19 @@ function parseCSV(text) {
 
 async function loadData(){
   try{
-    // Try SHEET_API first (returns both pedidos and facturacion)
-    let pedidosRows = [];
-    let facRows = [];
-    try {
-      const res = await fetch(SHEET_API);
-      if(res.ok) {
-        const data = await res.json();
-        if(data.pedidos && Array.isArray(data.pedidos)) {
-          pedidosRows = data.pedidos;
-        }
-        if(data.facturacion && Array.isArray(data.facturacion) && data.facturacion.length > 0) {
-          facRows = data.facturacion;
-          processBillingData(facRows);
-        }
-      }
-    } catch(apiErr) {
-      console.log('SHEET_API failed, falling back to CSV:', apiErr.message);
-    }
-
-    // Fallback to CSV if needed
-    if(!pedidosRows.length) {
-      const res = await fetch(CSV_URL);
-      if(!res.ok) throw new Error(`HTTP ${res.status}`);
-      const text = await res.text();
-      pedidosRows = parseCSV(text);
-    }
-
-    allRows = pedidosRows.filter(r => f(r,'Cliente').toString().trim());
+    // Load pedidos from CSV (fast)
+    const res = await fetch(CSV_URL);
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const text = await res.text();
+    allRows = parseCSV(text).filter(r => f(r,'Cliente').toString().trim());
     const now = new Date().toLocaleDateString('es-CR',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
     document.getElementById('last-update').textContent=`Actualizado ${now}`;
     document.getElementById('status-text').textContent=`${fmtNum(allRows.length)} registros cargados · Google Sheets`;
     populateFilters(allRows);
     buildAll(filterRows());
     document.getElementById('loader').classList.add('hidden');
+    // Load facturacion in background — non-blocking
+    loadFacturacion();
   }catch(e){
     document.getElementById('loader').classList.add('hidden');
     const eb=document.getElementById('error-banner');
@@ -628,6 +607,15 @@ async function loadData(){
     eb.textContent=`Error al cargar datos: ${e.message}`;
     document.getElementById('status-text').textContent='Error de conexión';
   }
+}
+
+async function loadFacturacion(){
+  try{
+    const res = await fetch(SHEET_API + '?type=facturacion');
+    if(!res.ok) return;
+    const rows = await res.json();
+    if(Array.isArray(rows) && rows.length > 0) processBillingData(rows);
+  } catch(e){ console.log('Facturacion:', e.message); }
 }
 
 function processBillingData(rows) {
@@ -807,7 +795,8 @@ function updateBillingBanner() {
 }
 
 function buildBillingChart(byMonth) {
-  const mLabels = Object.keys(byMonth).sort();
+  const today = new Date().toISOString().slice(0,7); // YYYY-MM
+  const mLabels = Object.keys(byMonth).filter(m => m <= today).sort();
   if(!mLabels.length) return;
   const container = document.getElementById('billing-chart-wrap');
   if(container) container.style.display='block';
@@ -834,69 +823,6 @@ function buildBillingChart(byMonth) {
     }
   });
 }
-
-document.getElementById('billing-file').addEventListener('change', function(e){
-  const file = e.target.files[0];
-  if(!file) return;
-  e.target.value = '';
-
-  const reader = new FileReader();
-  reader.onload = function(ev) {
-    try {
-      const wb = XLSX.read(ev.target.result, {type:'binary'});
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, {raw:false});
-
-      const validos = rows.filter(r => (r['Estado Hacienda']||'').toString().trim() !== 'Rechazado');
-      console.log('Billing rows:', validos.length);
-
-      let total=0, subtotal=0, iva=0;
-      const byMonth = {};
-
-      function parseCol(v) {
-        const s = (v||'0').toString().trim().replace(/\s/g,'');
-        if(!s || s === '-') return 0;
-        const lastComma = s.lastIndexOf(',');
-        const lastDot = s.lastIndexOf('.');
-        if(lastComma > lastDot) {
-          return parseFloat(s.replace(/\./g,'').replace(',','.')) || 0;
-        } else if(lastDot > lastComma) {
-          return parseFloat(s.replace(/,/g,'')) || 0;
-        }
-        return parseFloat(s.replace(/[^0-9-]/g,'')) || 0;
-      }
-      validos.forEach(r => {
-        const tCol = parseCol(r['Total Colones']);
-        const stCol = parseCol(r['Subtotal Colones']);
-        const ivaCol = parseCol(r['Total IVA Colones']);
-        total += tCol; subtotal += stCol; iva += ivaCol;
-        const fechaRaw = (r['Fecha']||'').toString().trim();
-        let ym = null;
-        if(fechaRaw.includes('T')) {
-          ym = fechaRaw.slice(0,7);
-        } else if(fechaRaw.includes('/')) {
-          const parts = fechaRaw.split('/');
-          if(parts.length === 3) ym = parts[2].slice(0,4) + '-' + parts[1].padStart(2,'0');
-        }
-        if(ym) byMonth[ym] = (byMonth[ym]||0) + tCol;
-      });
-
-      console.log('Total:', Math.round(total), 'byMonth:', JSON.stringify(byMonth));
-
-      billingTotal = total;
-      billingByMonth = byMonth;
-      billingValidos = validos.length;
-
-      // Update all UI — synchronously before anything can interrupt
-      document.getElementById('billing-status').textContent =
-        '✓ ' + fmtNum(validos.length) + ' facturas · ₡' + fmtNum(subtotal) + ' subtotal · IVA ₡' + fmtNum(iva) + ' · Total ₡' + fmtNum(total);
-      document.getElementById('m-util').textContent = '₡' + fmtNum(total * MARGIN);
-      updateBillingBanner();
-      buildBillingChart(byMonth);
-    } catch(err) { console.error('Billing error:', err); }
-  };
-  reader.readAsBinaryString(file);
-});
 
 
 loadData();
