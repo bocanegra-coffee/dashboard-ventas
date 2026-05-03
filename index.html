@@ -307,7 +307,7 @@
 </div>
 
 <script>
-const SHEET_API = 'https://script.google.com/macros/s/AKfycbxlNZ8WzzPpt_tlFEojgm09449Ol1WNmZdjD0CAouIVCPB2PRArWtxE51xOj6jzN6CgJA/exec';
+const SHEET_API = 'https://script.google.com/macros/s/AKfycbx_DNl44B44ilrXMo8MhBeiYIkjY_fGqBApx8g8roUgocgE-IBo4nN474DrrXEFZvnU/exec';
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQQbcwQFH48NTeiKDvwI4Sn_7ti5s1prCFnLRqrpKLOR3W4-EUnEUF2zKZrDgqGpbev1UIpBEL9octR/pub?gid=1572772894&single=true&output=csv';
 const SHOPIFY_API = 'https://script.google.com/macros/s/AKfycbyq76emTHdsfHNpJ1DSUHZ9wI-KA2efpXLDXLdkE195F7HUldUPJ9UVCLjo3yLqgjIm4Q/exec';
 const MARGIN = 0.35;
@@ -615,7 +615,7 @@ async function loadData(){
 
 async function loadFacturacion(){
   try{
-    const res = await fetch(SHEET_API + '?type=facturacion');
+    const res = await fetch(SHEET_API);
     if(!res.ok) return;
     const rows = await res.json();
     if(Array.isArray(rows) && rows.length > 0) processBillingData(rows);
