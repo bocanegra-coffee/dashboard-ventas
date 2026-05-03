@@ -615,11 +615,14 @@ async function loadData(){
 
 async function loadFacturacion(){
   try{
+    console.log('Loading facturacion from:', SHEET_API);
     const res = await fetch(SHEET_API);
-    if(!res.ok) return;
+    console.log('Facturacion response:', res.status, res.ok);
+    if(!res.ok) { console.log('Facturacion failed:', res.status); return; }
     const rows = await res.json();
+    console.log('Facturacion rows:', Array.isArray(rows) ? rows.length : typeof rows, rows[0] ? Object.keys(rows[0]) : 'empty');
     if(Array.isArray(rows) && rows.length > 0) processBillingData(rows);
-  } catch(e){ console.log('Facturacion:', e.message); }
+  } catch(e){ console.log('Facturacion error:', e.message); }
 }
 
 function processBillingData(rows) {
