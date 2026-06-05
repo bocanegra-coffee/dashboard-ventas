@@ -381,14 +381,11 @@ function buildAll(rows){
   document.getElementById('m-online-pct').textContent=`${onlinePct}% del total`;
   document.getElementById('m-util').textContent=billingTotal?'₡'+fmtNum(billingTotal*MARGIN):'—';
 
-  // Banner — current year kg (always from ALL rows, ignoring filters)
+  // Banner — set year labels (kg value set later after kgCurYear is calculated)
   const currentYear = new Date().getFullYear().toString();
   const prevYearStr = (parseInt(currentYear)-1).toString();
-  const currentYearRows = allRows.filter(r => f(r,'Ano').toString().trim() === currentYear);
-  const bannerKg = currentYearRows.reduce((a,r)=>a+num(r,'Kg tostado'),0);
   document.getElementById('banner-year').textContent = currentYear;
   document.getElementById('banner-year2').textContent = currentYear;
-  document.getElementById('banner-kg').textContent = fmtKg(bannerKg);
 
   // Kg tostado por mes + proyección
   const monthKg={};
@@ -526,7 +523,8 @@ function buildAll(rows){
     const pct = Math.round((curYearKgSamePeriod/prevYearKgSamePeriod - 1)*100);
     kgTrend = pct >= 0 ? ' · <span class="trend-up">▲ '+pct+'% vs '+prevYear+'</span>' : ' · <span class="trend-down">▼ '+Math.abs(pct)+'% vs '+prevYear+'</span>';
   }
-  document.getElementById('banner-kg-sub').innerHTML = fmtKg(curYearKgTotal) + ' en ' + currentYear + kgTrend;
+  document.getElementById('banner-kg').textContent = fmtKg(curYearKgTotal);
+  document.getElementById('banner-kg-sub').innerHTML = kgTrend ? kgTrend.replace(' · ','') : 'en ' + currentYear;
 
   // Top 8 clientes with growth
   const cliKg={};
