@@ -272,7 +272,17 @@
     <div class="metric-card" style="--accent-color:var(--accent4)">
       <div class="metric-label">Utilidad proyectada online</div>
       <div class="metric-value" id="sh-util">—</div>
-      <div class="metric-sub">35% margen</div>
+      <div class="metric-sub" id="sh-util-sub">35% margen</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:12px;">
+    <div class="card-header">
+      <span class="card-title" id="t-shop-mes">Ventas Shopify por mes (₡)</span>
+      <span class="card-badge" style="background:rgba(247,207,79,0.12);color:#f7cf4f" id="b-shop-mes">—</span>
+    </div>
+    <div class="chart-wrap" style="height:220px">
+      <canvas id="c-shop-mes" role="img" aria-label="Ventas de Shopify por mes">Ventas Shopify mensuales.</canvas>
     </div>
   </div>
 
@@ -323,7 +333,7 @@ const MONTHS_EN = {january:1,february:2,march:3,april:4,may:5,june:6,july:7,augu
 const COLORS = ['#4f8ef7','#1ec98e','#f7834f','#a78bfa','#f7cf4f','#f56565','#34d399','#fb923c','#60a5fa','#c084fc'];
 const AX = {ticks:{color:'#5a5e72',font:{size:10}},grid:{color:'rgba(255,255,255,0.04)'}};
 
-let pedidos = [], facturas = [], shopify = [], charts = {};
+let pedidos = [], facturas = [], shopify = [], shopifyMensual = null, charts = {};
 let dq = {}, factInfo = null, dataHasta = null, prodNames = {}, firstLoad = true;
 
 // ---------- utilidades ----------
@@ -740,28 +750,39 @@ function renderProyeccion(F,base){
 }
 
 function renderShopify(F){
-  if(!shopify.length) return;
+  if(!shopify.length&&!shopifyMensual) return;
   const set=(id,v)=>document.getElementById(id).textContent=v;
-  const desde=shopify[shopify.length-1].fecha;
   const rows=shopify.filter(o=>enPeriodo(o.fecha,F));
-  const parcial=inicioPeriodo(F)<desde.key;
-  const cobertura=`desde ${fmtFecha(desde)}`;
-  set('sh-sync',`Últimas ${shopify.length} órdenes · ${cobertura}`);
-  if(!rows.length){
-    ['sh-total','sh-orders','sh-avg','sh-util','m-online'].forEach(id=>set(id,'—'));
-    set('sh-period',`sin órdenes en el período (datos ${cobertura})`);
-    set('m-online-sub',`sin datos (Shopify ${cobertura})`);
+  const desde=shopify.length?shopify[shopify.length-1].fecha:null;
+  let total, n, neto, nota='';
+  if(shopifyMensual){
+    // Totales mensuales de ShopifyQL: cubren todo el historial
+    const ms=shopifyMensual.filter(x=>enPeriodo(x.fecha,F));
+    total=sum(ms,x=>x.total); n=sum(ms,x=>x.ordenes); neto=sum(ms,x=>x.neto);
+    set('sh-util-sub','35% de ventas netas');
   } else {
-    const total=sum(rows,o=>o.total);
-    set('sh-total',fmtCRC(total));
-    set('sh-orders',fmtNum(rows.length));
-    set('sh-period',parcial?`solo ${cobertura}`:periodoLabel(F));
-    set('sh-avg',fmtCRC(total/rows.length));
-    set('sh-util',fmtCRC(total*MARGIN));
-    set('m-online',fmtCRC(total));
-    set('m-online-sub',`${fmtNum(rows.length)} órdenes${parcial?' · solo '+cobertura:''}`);
+    // Respuesta antigua: solo órdenes de los últimos 60 días
+    total=sum(rows,o=>o.total); n=rows.length; neto=total;
+    if(desde&&inicioPeriodo(F)<desde.key) nota=`solo desde ${fmtFecha(desde)}`;
+    set('sh-util-sub','35% margen');
   }
+  set('sh-sync',shopify.length?`Últimas ${shopify.length} órdenes`:'Sin detalle de órdenes');
+  if(!n){
+    ['sh-total','sh-orders','sh-avg','sh-util','m-online'].forEach(id=>set(id,'—'));
+    set('sh-period',nota?`sin datos (${nota})`:'sin órdenes en el período');
+    set('m-online-sub',nota?`sin datos (${nota})`:'sin órdenes en el período');
+  } else {
+    set('sh-total',fmtCRC(total));
+    set('sh-orders',fmtNum(n));
+    set('sh-period',nota||periodoLabel(F));
+    set('sh-avg',fmtCRC(total/n));
+    set('sh-util',fmtCRC(neto*MARGIN));
+    set('m-online',fmtCRC(total));
+    set('m-online-sub',`${fmtNum(n)} órdenes${nota?' · '+nota:''}`);
+  }
+  renderShopifyMes(F);
   const cell='padding:8px 10px;';
+  const vacio=n&&desde?`El detalle solo incluye las últimas ${shopify.length} órdenes (desde ${fmtFecha(desde)})`:'Sin órdenes en el período';
   document.getElementById('sh-tbody').innerHTML=rows.length?rows.slice(0,15).map(o=>`
     <tr style="border-bottom:0.5px solid var(--border);">
       <td style="${cell}color:var(--text)">${esc(o.cliente||'Anónimo')}</td>
@@ -770,7 +791,27 @@ function renderShopify(F){
       <td style="${cell}color:var(--text);text-align:right;font-family:'DM Mono',monospace">${fmtCRC(o.total)}</td>
       <td style="${cell}"><span style="font-size:11px;padding:2px 8px;border-radius:6px;background:rgba(30,201,142,0.12);color:var(--accent2)">${esc(o.estado||'—')}</span></td>
     </tr>`).join('')
-    :`<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text3)">Sin órdenes en el período</td></tr>`;
+    :`<tr><td colspan="5" style="padding:20px;text-align:center;color:var(--text3)">${vacio}</td></tr>`;
+}
+
+function renderShopifyMes(F){
+  const Y=anioRef(F);
+  const cur=Array(12).fill(null), prev=Array(12).fill(null);
+  if(shopifyMensual){
+    shopifyMensual.forEach(x=>{ if(x.fecha.y===Y) cur[x.fecha.m-1]=Math.round(x.total); else if(x.fecha.y===Y-1) prev[x.fecha.m-1]=Math.round(x.total); });
+  } else {
+    shopify.forEach(o=>{ if(o.fecha.y===Y) cur[o.fecha.m-1]=(cur[o.fecha.m-1]||0)+o.total; });
+  }
+  document.getElementById('t-shop-mes').textContent=`Ventas Shopify ${Y} por mes (₡)`;
+  document.getElementById('b-shop-mes').textContent=shopifyMensual?`vs ${Y-1}`:'Solo últimos 60 días';
+  const ds=[{label:String(Y),data:cur,backgroundColor:'#f7cf4f',borderRadius:4}];
+  if(shopifyMensual) ds.push({label:String(Y-1),data:prev,backgroundColor:'rgba(247,207,79,0.25)',borderRadius:4});
+  mkChart('c-shop-mes','shopmes',{
+    type:'bar',data:{labels:MESES_SHORT,datasets:ds},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:!!shopifyMensual,position:'top',labels:{color:'#8b8fa8',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${fmtCRC(c.raw)}`}}},
+      scales:{x:AX,y:{...AX,ticks:{...AX.ticks,callback:v=>'₡'+(v/1e3).toLocaleString('es-CR')+'k'}}}}
+  });
 }
 
 function renderStatus(){
@@ -817,7 +858,12 @@ async function loadShopify(){
   try{
     const res=await fetch(SHOPIFY_API);
     const data=await res.json();
-    if(Array.isArray(data)) shopify=prepararShopify(data);
+    if(Array.isArray(data)){ shopify=prepararShopify(data); shopifyMensual=null; }   // formato antiguo
+    else if(data&&typeof data==='object'){
+      shopify=prepararShopify(Array.isArray(data.ordenes)?data.ordenes:[]);
+      shopifyMensual=Array.isArray(data.mensual)?data.mensual.map(x=>{ const [y,m]=String(x.mes).split('-').map(Number); return {fecha:mkDate(y,m,1),ordenes:+x.ordenes||0,total:+x.total||0,neto:+x.neto||0}; }).filter(x=>x.fecha):null;
+      if(data.errores&&data.errores.length) console.warn('Shopify:',data.errores.join(' | '));
+    }
   }catch(e){ console.warn('Shopify:',e.message); document.getElementById('sh-sync').textContent='Error Shopify'; }
 }
 
